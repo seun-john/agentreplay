@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="AgentReplay logo" width="420">
+</p>
+
 # AgentReplay
 
 A tamper-evident, redacted record of what an AI agent did.
