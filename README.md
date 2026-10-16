@@ -37,7 +37,9 @@ agentreplay compare two-runs.json                   # compare two traces by cont
 
 `compare` takes `{"events": [...], "other_events": [...]}` and lists the positions whose content differs. It compares content only, so two recordings of the same run made at different times match.
 
-All commands take `-o report.json`, `--html report.html` and `--strict`. Exit codes: 0 completed, 1 `--strict` and something other than `PASS`, `RECORDED` or `MATCH` was reported (an unanchored verification counts), 2 unusable input.
+All commands take `-o report.json`, `--html report.html` and `--strict`. Exit codes: 0 completed, 1 `--strict` and something other than `PASS`, `RECORDED` or `MATCH` was reported (an unanchored verification counts), 2 unusable input, 3 `--min-coverage` was not met.
+
+**Coverage.** `verify` and `compare` add a `coverage` object and print a line on stderr, for example `coverage: decided 0 of 3 events; 3 could not be checked (unanchored 3)`. Without a root hash from outside the file, an event that passes shows only that the chain is consistent: someone who rewrote the whole chain would pass too, so those events are undecided (`unanchored`). Events that fail are decided either way. With a root hash every event is decided. `--min-coverage PCT` exits 3 when fewer than PCT percent of events were decided and nothing else failed. `record` has no coverage block.
 
 ## Limits
 

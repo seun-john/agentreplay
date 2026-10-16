@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .core import InputError, digest, finding, report, require
+from .core import InputError, coverage, digest, finding, report, require
 from .redact import redact
 
 GENESIS = "0" * 64
@@ -102,7 +102,29 @@ def verify(data: dict[str, Any], root_hash: str | None = None) -> dict[str, Any]
                 root_hash=previous,
             )
         )
-    return report("AgentReplay", out, root_hash=previous)
+    # Without a root hash from outside the file, an event that passes is only consistent with
+    # the rest of the chain: someone who rewrote the whole chain would pass too. Such events
+    # are undecided. Events that fail are decided either way.
+    unanchored = bool(events) and not anchor
+    passed = sum(1 for f in out if f["status"] == "PASS" and "index" in f["evidence"])
+    undecided = passed if unanchored else 0
+    return report(
+        "AgentReplay",
+        out,
+        coverage=coverage(
+            "events",
+            len(events),
+            len(events) - undecided,
+            {"unanchored": undecided},
+            notes=[
+                "no root hash from an independent source was supplied, so passing events show "
+                "only that the chain is consistent, not that it is the one recorded"
+            ]
+            if unanchored
+            else [],
+        ),
+        root_hash=previous,
+    )
 
 
 def compare(data: dict[str, Any]) -> dict[str, Any]:
@@ -119,7 +141,8 @@ def compare(data: dict[str, Any]) -> dict[str, Any]:
     changed = [i for i in range(max(len(a), len(b))) if i >= len(a) or i >= len(b) or a[i] != b[i]]
     return report(
         "AgentReplay",
-        [
+        coverage=coverage("events", max(len(a), len(b)), max(len(a), len(b))),
+        findings=[
             finding(
                 "DIFFERENT" if changed else "MATCH",
                 f"{len(changed)} event position(s) differ."

@@ -47,6 +47,63 @@ def test_verify_clean_chain_with_and_without_anchor() -> None:
     assert statuses(anchored)[-1] == "PASS"
 
 
+def test_coverage_without_an_anchor_leaves_passing_events_undecided() -> None:
+    events = chain()["events"]
+    block = verify({"events": events})["coverage"]
+    assert (block["unit"], block["items"], block["decided"], block["undecided"]) == (
+        "events",
+        3,
+        0,
+        3,
+    )
+    assert block["reasons"] == {"unanchored": 3}
+    assert "no root hash" in block["notes"][0]
+
+
+def test_coverage_without_an_anchor_still_decides_the_events_that_fail() -> None:
+    edited = chain()["events"]
+    edited[1]["event"]["args"]["path"] = "secret.txt"
+    block = verify({"events": edited})["coverage"]
+    assert block["items"] == 3
+    # event 1 is TAMPERED (decided); events 0 and 2 pass but are unanchored
+    assert (block["decided"], block["undecided"]) == (1, 2)
+    assert block["decided"] + block["undecided"] == block["items"]
+    assert sum(block["reasons"].values()) == block["undecided"]
+
+
+def test_coverage_with_an_anchor_decides_every_event() -> None:
+    result = chain()
+    block = verify({"events": result["events"]}, result["root_hash"])["coverage"]
+    assert (block["decided"], block["undecided"], block["reasons"], block["notes"]) == (
+        3,
+        0,
+        {},
+        [],
+    )
+
+
+def test_coverage_of_an_empty_trace_and_of_compare_and_record() -> None:
+    assert verify({"events": []})["coverage"]["items"] == 0
+    both = {"events": chain()["events"], "other_events": chain()["events"][:2]}
+    assert compare(both)["coverage"]["items"] == 3
+    assert "coverage" not in chain()
+
+
+def test_cli_min_coverage_needs_an_anchor(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    result = chain()
+    src = tmp_path / "trace.json"
+    src.write_text(json.dumps({"events": result["events"]}), encoding="utf-8")
+    out = str(tmp_path / "r.json")
+    assert main(["verify", str(src), "-o", out, "--min-coverage", "100"]) == 3
+    assert "coverage: decided 0 of 3 events; 3 could not be checked (unanchored 3)" in (
+        capsys.readouterr().err
+    )
+    anchored = ["--root-hash", result["root_hash"]]
+    assert main(["verify", str(src), "-o", out, *anchored, "--min-coverage", "100"]) == 0
+
+
 def test_edit_is_detected_at_that_event() -> None:
     result = chain()
     edited = copy.deepcopy(result["events"])
